@@ -1,3 +1,4 @@
+escapeStringRegexp = require 'escape-string-regexp'
 fs = require 'fs'
 path = require 'path'
 PathSearcher = require '../src/path-searcher'
@@ -132,6 +133,25 @@ describe "PathSearcher", ->
           expect(results.matches[0].lineText).toBe '  var sort = function(items) {'
           expect(results.matches[0].matchText).toBe 'items'
           expect(results.matches[0].range).toEqual [[1, 22], [1, 27]]
+
+      it "finds multiline matches", ->
+        searcher.on 'results-found', resultsHandler = jasmine.createSpy()
+        pattern = ("\\s*#{escapeStringRegexp line}" for line in [
+          'var pivot = items.shift(), current, left = [], right = [];',
+          'while(items.length > 0) {'
+        ]).join('\\n')
+        searcher.searchPath new RegExp(pattern, 'g'), filePath, finishedHandler = jasmine.createSpy()
+
+        waitsFor ->
+          finishedHandler.callCount > 0
+
+        runs ->
+          expect(resultsHandler.callCount).toBe 1
+
+          results = resultsHandler.mostRecentCall.args[0]
+          expect(results.filePath).toBe filePath
+          expect(results.matches.length).toBe 1
+
 
     describe "With windows line endings", ->
       beforeEach ->

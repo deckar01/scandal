@@ -142,9 +142,29 @@ class PathSearcher extends EventEmitter
   #   * `error` {Error}; null when there is no error
   searchPath: (regex, filePath, doneCallback) ->
     matches = null
-    lineNumber = 0
-    reader = new ChunkedLineReader(filePath)
     error = null
+    lineNumber = 0
+    lineBreaks = /\\[nr]|\n|\r/
+
+    if regex.source.match lineBreaks
+      reader = fs.createReadStream filePath
+      reader.on 'data', (chunk) =>
+        string = chunk.toString()
+        stringMatches = @searchLine regex, string, lineNumber++ # TODO: I know this will not give a correct line number!
+        if stringMatches?
+          matches ?= []
+          matches.push(match) for match in stringMatches
+    else
+      reader = new ChunkedLineReader(filePath)
+
+      reader.on 'data', (chunk) =>
+        lines = chunk.toString().replace(TRAILING_LINE_END_REGEX, '').split(LINE_END_REGEX)
+        for line in lines
+          lineMatches = @searchLine(regex, line, lineNumber++)
+
+          if lineMatches?
+            matches ?= []
+            matches.push(match) for match in lineMatches
 
     reader.on 'error', (e) =>
       error = e
@@ -157,15 +177,6 @@ class PathSearcher extends EventEmitter
       else
         @emit('results-not-found', filePath)
       doneCallback(output, error)
-
-    reader.on 'data', (chunk) =>
-      lines = chunk.toString().replace(TRAILING_LINE_END_REGEX, '').split(LINE_END_REGEX)
-      for line in lines
-        lineMatches = @searchLine(regex, line, lineNumber++)
-
-        if lineMatches?
-          matches ?= []
-          matches.push(match) for match in lineMatches
 
 
     return
