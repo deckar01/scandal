@@ -7,7 +7,10 @@ ChunkedLineReader = require("./chunked-line-reader")
 MAX_LINE_LENGTH = 100
 WORD_BREAK_REGEX = /[ \r\n\t;:?=&\/]/
 LINE_END_REGEX = /\r\n|\n|\r/
+GLOBAL_LINE_END_REGEX = new RegExp(LINE_END_REGEX, 'g')
 TRAILING_LINE_END_REGEX = /\r?\n?$/
+
+newlineCount = (string) -> string.match(GLOBAL_LINE_END_REGEX)?.length || 0
 
 # Public: Will search through paths specified for a regex.
 #
@@ -144,16 +147,18 @@ class PathSearcher extends EventEmitter
     matches = null
     error = null
     lineNumber = 0
-    lineBreaks = /\\[nr]|\n|\r/
+    lineBreak = /\\[nr]|\n|\r/
 
-    if regex.source.match lineBreaks
+    if regex.source.match lineBreak
       reader = fs.createReadStream filePath
       reader.on 'data', (chunk) =>
         string = chunk.toString()
-        stringMatches = @searchLine regex, string, lineNumber++ # TODO: I know this will not give a correct line number!
+        stringMatches = @searchLine regex, string, lineNumber # TODO: I know this will not give a correct line number!
+        jasmine.log stringMatches
         if stringMatches?
           matches ?= []
-          matches.push(match) for match in stringMatches
+          console.log(match) && matches.push(match) for match in stringMatches
+        lineNumber += newlineCount(string)
     else
       reader = new ChunkedLineReader(filePath)
 
@@ -224,7 +229,23 @@ class PathSearcher extends EventEmitter
         lineTextLength = lineTextEndOffset - lineTextOffset
         lineText = line.substr(lineTextOffset, lineTextLength)
 
-      range = [[lineNumber, matchIndex], [lineNumber, matchEndIndex]]
+      lineBreaks = newlineCount line
+      range = if lineBreaks == 0
+        # TODO: we may not need this branch at all
+        [[lineNumber, matchIndex], [lineNumber, matchEndIndex]]
+      else
+        lastLineRegex = new RegExp("#{LINE_END_REGEX.source}.*?$")
+        prematch = line.substr 0, matchIndex
+        startLineOffset = newlineCount prematch
+        console.info {prematch}
+        console.info prematch.match(lastLineRegex)
+        console.log "last line of prematch: #{prematch.match(lastLineRegex)[0]}\nEND"
+        startColumn = prematch.match(lastLineRegex)[0].length - 1
+        endLineOffset = startLineOffset + newlineCount(matchText)
+        endColumn = matchText.match(lastLineRegex)[0].length - 1
+        startLineNumber = lineNumber + startLineOffset
+        endLineNumber = lineNumber + endLineOffset
+        [[startLineNumber, startColumn], [endLineNumber, endColumn]] # TODO: indices are still not correct, but line numbers should be
       matches ?= []
       matches.push {matchText, lineText, lineTextOffset, range}
 

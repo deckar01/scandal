@@ -136,10 +136,11 @@ describe "PathSearcher", ->
 
       it "finds multiline matches", ->
         searcher.on 'results-found', resultsHandler = jasmine.createSpy()
-        pattern = ("\\s*#{escapeStringRegexp line}" for line in [
-          'var pivot = items.shift(), current, left = [], right = [];',
+        patternLines = [
+          'right = [];',
           'while(items.length > 0) {'
-        ]).join('\\n')
+        ]
+        pattern = (escapeStringRegexp(line) for line in patternLines).join('\\n\\s*')
         searcher.searchPath new RegExp(pattern, 'g'), filePath, finishedHandler = jasmine.createSpy()
 
         waitsFor ->
@@ -151,7 +152,13 @@ describe "PathSearcher", ->
           results = resultsHandler.mostRecentCall.args[0]
           expect(results.filePath).toBe filePath
           expect(results.matches.length).toBe 1
-
+          {lineText, matchText, range} = results.matches[0]
+          expect(lineText).toBe """
+            items.shift(), current, left = [], right = [];
+            \    while(items.length > 0) {
+          """
+          expect(matchText).toBe patternLines.join('\n    ')
+          expect(range).toEqual [[3, 0], [4, 29]]
 
     describe "With windows line endings", ->
       beforeEach ->
